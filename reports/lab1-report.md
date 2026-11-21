@@ -107,12 +107,14 @@ model Consultation {
 
 | Файл | Що на ньому |
 |---|---|
-| `swagger-ui.png` | Swagger UI на `/api-docs` — усі групи ендпоінтів (скріншот headless Chrome) |
+| `swagger-ui.png` | Swagger UI на `/api-docs` — усі групи ендпоінтів (справжній скріншот headless Chrome) |
 | `er-diagram.png` | ER-діаграма БД (mermaid → PNG) |
-| `terminal-curl.png` | curl-запити до API з JSON-відповідями (health, список юристів, створення консультації, помилка валідації 400, 404) |
-| `terminal-smoke.png` | smoke-скрипт `scripts/smoke.mjs`: **16/16 PASS** |
-| `terminal-npm-test.png` | `npm test`: **28 тестів, 7 suites, 0 fail** (`node:test` + supertest проти тестової БД `legal_consult_test`) |
+| `terminal-curl.png` | **справжній знімок екрана вікна Terminal.app** (macOS `screencapture`): curl-запити наживо через `scripts/curl-demo.sh` — health, список юристів, створення консультації, валідація → 400, невідомий маршрут → 404 |
+| `terminal-smoke.png` | **знімок вікна Terminal.app**: `node scripts/smoke.mjs` наживо — **16/16 PASS** |
+| `terminal-npm-test.png` | **знімок вікна Terminal.app**: `npm test` наживо — **tests 28, pass 28, fail 0** |
 | `api-smoke.txt`, `npm-test.txt`, `curl-session.txt` | ті самі виводи текстом |
+
+Термінальні скріншоти зроблені справжніми знімками екрана (команди виконувались у Terminal.app, вікно захоплено `screencapture -l<window id>`), а не згенеровані скриптом. Після останньої зміни схеми повний цикл перезапущено наново: `npx prisma migrate dev` → «Already in sync», `npm test` → 28 pass / 0 fail, `node scripts/smoke.mjs` → 16/16 PASS (свіжі логи — у `reports/screenshots/*.txt`).
 
 Сценарії smoke: health, списки з фільтрами, створення консультації з ціною за замовчуванням = ставка юриста, зміна статусу, чат лише для учасників → 403 для стороннього, відгук лише після COMPLETED, дубль відгуку → 409, валідація → 400, 404/400 для поганих запитів.
 
