@@ -1,0 +1,86 @@
+$ curl -s localhost:3000/health
+{
+  "status": "ok",
+  "timestamp": "2026-11-21T11:48:56.080Z"
+}
+
+$ curl -s 'localhost:3000/api/lawyers?sortBy=pricePerHour&order=asc'   # перші 2 записи
+{
+  "data": [
+    {
+      "id": 5,
+      "userId": 12,
+      "bio": "Юрист із сімейних спорів, медіатор. Допомагаю мирно врегулювати конфлікти.",
+      "experienceYears": 8,
+      "pricePerHour": "700",
+      "rating": null,
+      "isVerified": true,
+      "user": {
+        "id": 12,
+        "name": "Шевченко Олена Петрівна",
+        "email": "olena.shevchenko@legal.ua",
+        "phone": "+380672223344",
+        "role": "LAWYER"
+      },
+      "specializations": [
+        {
+          "id": 9,
+          "name": "Сімейне право",
+          "description": "Розірвання шлюбу, аліменти, поділ майна, опіка над дитиною"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "userId": 11,
+      "bio": "Адвокат, 12 років практики. Спеціалізація на нерухомості та договірному праві.",
+      "experienceYears": 12,
+      "pricePerHour": "900",
+      "rating": "5",
+      "isVerified": true,
+      "user": {
+        "id": 11,
+        "name": "Петренко Іван Олексійович",
+        "email": "ivan.petrenko@legal.ua",
+        "phone": "+380671112233",
+        "role": "LAWYER"
+      },
+      "specializations": [
+        {
+          "id": 7,
+          "name": "Цивільне право",
+          "description": "Договори, нерухомість, відшкодування шкоди, спадщина"
+        },
+        {
+          "id": 10,
+          "name": "Господарське право",
+          "description": "Господарські спори, договори між підприємствами, банкрутство"
+        }
+      ]
+    }
+  ]
+}
+
+$ curl -s -X POST localhost:3000/api/consultations -H "Content-Type: application/json" -d @body
+  body: {"clientId":5,"lawyerId":2,"topic":"Договір купівлі квартири","description":"Перевірити договір купівлі-продажу квартири та оцінити ризики для покупця."}
+{
+  "error": "Клієнта не знайдено"
+}
+
+$ curl -s -X POST localhost:3000/api/users -H "Content-Type: application/json" -d "{\"email\":\"bad\",\"name\":\"A\"}"   # помилка валідації
+{
+  "error": "Помилка валідації даних",
+  "details": {
+    "email": [
+      "невірний формат email"
+    ],
+    "name": [
+      "мінімальна довжина — 2 символів"
+    ]
+  }
+}
+
+$ curl -s localhost:3000/api/nope   # невідомий маршрут
+{
+  "error": "Маршрут не знайдено: GET /api/nope"
+}

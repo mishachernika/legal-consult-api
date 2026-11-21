@@ -35,6 +35,7 @@ model User {
   consultationsAsLawyer Consultation[] @relation("LawyerConsultations")
   messages              Message[]
   reviews               Review[]
+  reviewsAbout          Review[]       @relation("LawyerReviews")
 
   @@index([role])
 }
@@ -110,6 +111,7 @@ model Review {
 
   consultation Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
   client       User         @relation(fields: [clientId], references: [id])
+  lawyer       User         @relation("LawyerReviews", fields: [lawyerId], references: [id])
 
   @@index([lawyerId])
   @@index([rating])

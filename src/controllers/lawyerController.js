@@ -1,12 +1,10 @@
-import { prisma } from '../db.js';
+import { lawyerModel } from '../models/lawyerModel.js';
+import { userModel } from '../models/userModel.js';
+import { specializationModel } from '../models/specializationModel.js';
+import { reviewModel } from '../models/reviewModel.js';
 import { AppError } from '../utils/AppError.js';
 import { assertValid } from '../utils/validate.js';
 import { parseId } from '../utils/params.js';
-
-export const lawyerInclude = {
-  user: { select: { id: true, name: true, email: true, phone: true, role: true } },
-  specializations: true,
-};
 
 const SORTABLE = ['rating', 'pricePerHour', 'experienceYears'];
 
@@ -29,9 +27,8 @@ export async function getLawyers(req, res) {
     if (maxPrice !== undefined) where.pricePerHour.lte = Number(maxPrice);
   }
 
-  const lawyers = await prisma.lawyerProfile.findMany({
+  const lawyers = await lawyerModel.findAll({
     where,
-    include: lawyerInclude,
     orderBy: { [SORTABLE.includes(sortBy) ? sortBy : 'rating']: order === 'asc' ? 'asc' : 'desc' },
   });
   res.json({ data: lawyers });
@@ -39,25 +36,18 @@ export async function getLawyers(req, res) {
 
 export async function getLawyerById(req, res) {
   const id = parseId(req.params.id, 'ідентифікатор профілю юриста');
-  const lawyer = await prisma.lawyerProfile.findUnique({
-    where: { id },
-    include: lawyerInclude,
-  });
+  const lawyer = await lawyerModel.findById(id);
   if (!lawyer) throw new AppError(404, 'Профіль юриста не знайдено');
-  const consultationsCount = await prisma.consultation.count({ where: { lawyerId: lawyer.userId } });
-  const reviews = await prisma.review.findMany({
-    where: { lawyerId: lawyer.userId },
-    orderBy: { createdAt: 'desc' },
-    include: { client: { select: { id: true, name: true } } },
-  });
+
+  const [consultationsCount, reviews] = await Promise.all([
+    lawyerModel.countConsultations(lawyer.userId),
+    reviewModel.findByLawyer(lawyer.userId),
+  ]);
   res.json({ data: { ...lawyer, consultationsCount, reviews } });
 }
 
 async function assertSpecializationsExist(specializationIds) {
-  const found = await prisma.specialization.findMany({
-    where: { id: { in: specializationIds } },
-    select: { id: true },
-  });
+  const found = await specializationModel.findByIds(specializationIds);
   if (found.length !== specializationIds.length) {
     throw new AppError(400, 'Частину спеціалізацій не знайдено', { specializationIds });
   }
@@ -81,27 +71,24 @@ export async function createLawyer(req, res) {
     specializationIds = [],
   } = req.body;
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await userModel.findById(userId);
   if (!user) throw new AppError(404, 'Користувача не знайдено');
 
-  const existing = await prisma.lawyerProfile.findUnique({ where: { userId } });
+  const existing = await lawyerModel.findByUserId(userId);
   if (existing) throw new AppError(409, 'Профіль юриста для цього користувача вже існує');
 
   if (specializationIds.length > 0) await assertSpecializationsExist(specializationIds);
 
-  const lawyer = await prisma.lawyerProfile.create({
-    data: {
-      userId,
-      bio,
-      experienceYears,
-      pricePerHour,
-      isVerified,
-      specializations: { connect: specializationIds.map((id) => ({ id })) },
-    },
-    include: lawyerInclude,
+  const lawyer = await lawyerModel.create({
+    userId,
+    bio,
+    experienceYears,
+    pricePerHour,
+    isVerified,
+    specializations: { connect: specializationIds.map((id) => ({ id })) },
   });
   // користувач із профілем юриста отримує роль LAWYER
-  await prisma.user.update({ where: { id: userId }, data: { role: 'LAWYER' } });
+  await userModel.setRole(userId, 'LAWYER');
 
   res.status(201).json({ data: lawyer });
 }
@@ -116,9 +103,7 @@ export async function updateLawyer(req, res) {
     specializationIds: ['arrayOfPositiveInt'],
   });
   const { bio, experienceYears, pricePerHour, isVerified, specializationIds } = req.body ?? {};
-  if (
-    [bio, experienceYears, pricePerHour, isVerified, specializationIds].every((v) => v === undefined)
-  ) {
+  if ([bio, experienceYears, pricePerHour, isVerified, specializationIds].every((v) => v === undefined)) {
     throw new AppError(400, 'Не передано жодного поля для оновлення');
   }
   if (specializationIds && specializationIds.length > 0) {
@@ -133,14 +118,14 @@ export async function updateLawyer(req, res) {
     data.specializations = { set: specializationIds.map((sid) => ({ id: sid })) };
   }
 
-  const lawyer = await prisma.lawyerProfile.update({ where: { id }, data, include: lawyerInclude });
+  const lawyer = await lawyerModel.update(id, data);
   res.json({ data: lawyer });
 }
 
 export async function deleteLawyer(req, res) {
   const id = parseId(req.params.id, 'ідентифікатор профілю юриста');
-  const lawyer = await prisma.lawyerProfile.delete({ where: { id } });
+  const lawyer = await lawyerModel.remove(id);
   // без профілю користувач знову стає клієнтом
-  await prisma.user.update({ where: { id: lawyer.userId }, data: { role: 'CLIENT' } });
+  await userModel.setRole(lawyer.userId, 'CLIENT');
   res.status(204).end();
 }

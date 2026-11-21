@@ -107,7 +107,8 @@ CI: `.github/workflows/tests.yml` — на кожен push/PR жене тест�
 │   ├── server.js            # запуск сервера
 │   ├── db.js                # єдиний екземпляр PrismaClient
 │   ├── config/swagger.js    # конфігурація OpenAPI
-│   ├── controllers/         # бізнес-логіка CRUD
+│   ├── models/              # шар моделей (MVC Model): усі Prisma-запити тут
+│   ├── controllers/         # тонкі контролери: валідація + правила + відповіді
 │   ├── routes/              # маршрути + JSDoc для Swagger
 │   ├── middleware/          # централізована обробка помилок
 │   └── utils/               # валідація, AppError, parseId

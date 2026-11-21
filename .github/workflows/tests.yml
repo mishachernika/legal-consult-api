@@ -10,8 +10,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
+      NODE_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/legal_consult_test
-      DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/legal_consult_test
       PORT: 3100
       FRONTEND_URL: http://localhost:5173
     services:

@@ -27,19 +27,19 @@
 
 1. **Середовище.** Встановлено Node.js 24 LTS (`brew install node@24`, `node -v` → v24.22.3) та PostgreSQL 17 (`brew install postgresql@17`, кластер на порту 5433, база `legal_consult`, тестова `legal_consult_test`). Створено GitHub-репозиторій `legal-consult-api`.
 2. **Проєкт.** `npm init`, `"type": "module"`, скрипти `dev` (`node --env-file=.env --watch src/server.js`), `start`, `test`. Залежності: `express@5`, `@prisma/client@7`, `prisma@7`, `@prisma/adapter-pg`, `pg`, `dotenv`, `helmet`, `cors`, `swagger-jsdoc`, `swagger-ui-express`; dev: `supertest`.
-3. **Структура папок** за вимогою: `src/controllers/`, `src/routes/`, `src/middleware/`, `src/utils/`, `src/config/`, `prisma/`, `tests/`, `reports/`, `scripts/`.
+3. **Структура папок** за вимогою методички (крок 4): `src/controllers/`, `src/models/`, `src/routes/`, `src/middleware/`, `src/utils/`, `src/config/`, `prisma/`, плюс `tests/`, `reports/`, `scripts/`.
 4. **Змінні середовища.** `.env` (gitignored) з `DATABASE_URL`, `PORT`, `FRONTEND_URL`; у репозиторії — `.env.example` та `.env.test.example`.
 5. **Схема БД** (`prisma/schema.prisma`), міграція `npx prisma migrate dev --name init`, генерація клієнта `npx prisma generate`. Єдиний екземпляр клієнта — `src/db.js` (`PrismaPg` адаптер + згенерований `PrismaClient`).
 6. **Сервер.** `src/app.js` збирає застосунок (без `listen` — для тестів), `src/server.js` запускає порт. Middleware: helmet (CSP вимкнено для Swagger UI), cors, `express.json`, `/health`, Swagger UI, роутери, `notFound` + централізований `errorHandler`.
-7. **CRUD-контролери** для сутностей: `userController`, `lawyerController`, `specializationController`, `consultationController`, `messageController`, `reviewController`. Валідація — власна DSL у `src/utils/validate.js` (`assertValid` кидає `AppError(400, details)`). Помилки Prisma мапяться: P2002→409, P2025→404, P2003→409.
+7. **Шар моделей (MVC Model)** `src/models/*.js`: `userModel`, `lawyerModel`, `specializationModel`, `consultationModel`, `messageModel`, `reviewModel` — кожна інкапсулює Prisma-запити своєї сутності (`findAll`, `findById`, `create`, `update`, `remove` тощо). **Контролери тонкі**: `src/controllers/*.js` містять лише валідацію, бізнес-правила (наприклад, писати в чат можуть лише учасники консультації) та HTTP-відповіді. Валідація — власна DSL у `src/utils/validate.js` (`assertValid` кидає `AppError(400, details)`). Помилки Prisma мапляться: P2002→409, P2025→404, P2003→409.
 8. **Swagger.** `src/config/swagger.js` + JSDoc-коментарі `@swagger` у кожному файлі роутів; UI на `http://localhost:3000/api-docs`.
 9. **Seed та тести.** `prisma/seed.js` (6 сфер права, 7 користувачів, 3 профілі юристів, 4 консультації, чат, відгук). `tests/api.test.js` — 28 інтеграційних тестів (`node:test` + supertest проти тестової БД). `scripts/smoke.mjs` — 16 smoke-перевірок проти живого сервера. CI `.github/workflows/tests.yml` (Node 24 + PostgreSQL 17 сервіс).
 
 ## 4. Схема бази даних
 
-6 моделей: `User` (enum `Role`: CLIENT/LAWYER/ADMIN), `LawyerProfile` (1:1 з User), `Specialization`, `Consultation` (enum `ConsultationStatus`, 1:N від обох сторін User), `Message` (чат, 1:N), `Review` (1:1 з Consultation, унікальний `consultationId`). Зв'язок many-to-many — неявний `LawyerProfile ↔ Specialization`. Індекси на зовнішніх ключах і полях фільтрів (`role`, `status`, `lawyerId`, `pricePerHour`).
+6 моделей: `User` (enum `Role`: CLIENT/LAWYER/ADMIN), `LawyerProfile` (1:1 з User), `Specialization`, `Consultation` (enum `ConsultationStatus`, 1:N від обох сторін User), `Message` (чат, 1:N), `Review` (1:1 з Consultation, унікальний `consultationId`). Зв'язок many-to-many — неявний `LawyerProfile ↔ Specialization`. Усі зовнішні ключі оголошені через `@relation` на рівні БД (включно з `Review.lawyerId → User`), індекси — на зовнішніх ключах і полях фільтрів (`role`, `status`, `lawyerId`, `pricePerHour`).
 
-ER-діаграма (mermaid) — у `README.md`.
+ER-діаграма — у `README.md` (mermaid) та `reports/screenshots/er-diagram.png`.
 
 ## 5. Ключові лістинги
 
@@ -103,10 +103,18 @@ model Consultation {
 
 ## 6. Тестування API
 
-Запущено сервер (`npm run dev`) і перевірено ендпоінти. Результати — у `reports/screenshots/`:
+Запущено сервер (`npm run dev`) і перевірено ендпоінти. Скріншоти та логи — у `reports/screenshots/`:
 
-- `api-smoke.txt` — smoke-скрипт `scripts/smoke.mjs`: **16/16 PASS** (health, списки з фільтрами, створення консультації з ціною за замовчуванням = ставка юриста, зміна статусу, чат лише для учасників → 403 для стороннього, відгук лише після COMPLETED, дубль → 409, валідація → 400, 404/400 для поганих запитів).
-- `npm-test.txt` — `npm test`: **28 тестів, 7 suites, 0 fail** (`node:test` + supertest проти тестової БД `legal_consult_test`).
+| Файл | Що на ньому |
+|---|---|
+| `swagger-ui.png` | Swagger UI на `/api-docs` — усі групи ендпоінтів (скріншот headless Chrome) |
+| `er-diagram.png` | ER-діаграма БД (mermaid → PNG) |
+| `terminal-curl.png` | curl-запити до API з JSON-відповідями (health, список юристів, створення консультації, помилка валідації 400, 404) |
+| `terminal-smoke.png` | smoke-скрипт `scripts/smoke.mjs`: **16/16 PASS** |
+| `terminal-npm-test.png` | `npm test`: **28 тестів, 7 suites, 0 fail** (`node:test` + supertest проти тестової БД `legal_consult_test`) |
+| `api-smoke.txt`, `npm-test.txt`, `curl-session.txt` | ті самі виводи текстом |
+
+Сценарії smoke: health, списки з фільтрами, створення консультації з ціною за замовчуванням = ставка юриста, зміна статусу, чат лише для учасників → 403 для стороннього, відгук лише після COMPLETED, дубль відгуку → 409, валідація → 400, 404/400 для поганих запитів.
 
 Приклади запитів (curl):
 
@@ -128,13 +136,13 @@ Swagger UI: `GET /api-docs/` → 200 (всі ендпоінти з прикла�
 
 ## 7. Контрольні питання
 
-1. **Node.js** — серверний рантайм на движку V8; переваги: неблокуючий event-driven I/O, одна мова JS на фронті й bekенді, величезна екосистема npm.
+1. **Node.js** — серверний рантайм на движку V8; переваги: неблокуючий event-driven I/O, одна мова JS на фронті й бекенді, величезна екосистема npm.
 2. **Синхронність vs асинхронність**: синхронний код блокує потік до завершення (наприклад, `fs.readFileSync`), асинхронний реєструє callback/promise і продовжує роботу — у нашому API всі запити до БД асинхронні (`await prisma...`), тому сервер обробляє багато запитів одночасно на одному потоці.
 3. **Express middleware** — функція `(req, res, next)`, що обробляє запит у ланцюжку: у нас `helmet`, `cors`, `express.json`, роутери та `errorHandler` (4 аргументи — перехоплює помилки).
 4. **ORM/Prisma vs SQL**: Prisma генерує типобезпечний клієнт і міграції зі схеми, захищає від SQL-ін'єкцій параметризованими запитами; прямий SQL — ручні запити й ручні міграції.
 5. **REST**: ресурси в URL, stateless-запити, JSON; CRUD → GET (read), POST (create), PUT (update), DELETE (delete).
 6. **Валідація на сервері** потрібна, бо клієнт може надіслати будь-що: у нас `assertValid` перевіряє типи/діапазони/enum і повертає 400 зі списком помилок по полях.
-7. **MVC у проєкті**: Model — Prisma-схема + `db.js`; View — JSON-відповіді (Swagger як документація «виду» API); Controller — `src/controllers/*`, маршрути у `src/routes/*`.
+7. **MVC у проєкті**: Model — Prisma-схема + шар `src/models/*.js` (всі запити до БД) + `db.js` (єдиний екземпляр клієнта); Controller — тонкі `src/controllers/*` (валідація, правила, відповіді), маршрути у `src/routes/*`; View — JSON-відповіді API, документація «виду» — Swagger UI.
 8. **Міграції Prisma**: `migrate dev` створює SQL-файл у `prisma/migrations/` і застосовує його; історія зберігається в БД (`_prisma_migrations`), `migrate deploy` — для продакшну.
 9. **Змінні середовища** (`DATABASE_URL`, `PORT`, секрети) винесені в `.env` поза git, підставляються через `--env-file` і `dotenv/config` у `prisma.config.ts`.
 10. **Безпека ендпоінтів**: валідація вхідних даних, параметризовані запити ORM, helmet (захисні заголовки), CORS лише для свого фронтенду, `.env` у `.gitignore`, централізований обробник помилок без витоку деталей 500-клієнту. (У ЛР2 додадуться Argon2id, JWT, ролі, rate limiting.)

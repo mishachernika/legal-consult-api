@@ -1,19 +1,16 @@
-import { prisma } from '../db.js';
+import { consultationModel } from '../models/consultationModel.js';
+import { userModel } from '../models/userModel.js';
+import { messageModel } from '../models/messageModel.js';
 import { AppError } from '../utils/AppError.js';
 import { assertValid } from '../utils/validate.js';
 import { parseId } from '../utils/params.js';
 
 export async function listMessages(req, res) {
   const consultationId = parseId(req.params.id, 'ідентифікатор консультації');
-  const consultation = await prisma.consultation.findUnique({ where: { id: consultationId } });
+  const consultation = await consultationModel.findByIdCore(consultationId);
   if (!consultation) throw new AppError(404, 'Консультацію не знайдено');
 
-  const messages = await prisma.message.findMany({
-    where: { consultationId },
-    orderBy: { createdAt: 'asc' },
-    include: { sender: { select: { id: true, name: true, role: true } } },
-  });
-  res.json({ data: messages });
+  res.json({ data: await messageModel.findByConsultation(consultationId) });
 }
 
 export async function createMessage(req, res) {
@@ -24,10 +21,10 @@ export async function createMessage(req, res) {
   });
   const { senderId, text } = req.body;
 
-  const consultation = await prisma.consultation.findUnique({ where: { id: consultationId } });
+  const consultation = await consultationModel.findByIdCore(consultationId);
   if (!consultation) throw new AppError(404, 'Консультацію не знайдено');
 
-  const sender = await prisma.user.findUnique({ where: { id: senderId } });
+  const sender = await userModel.findById(senderId);
   if (!sender) throw new AppError(404, 'Відправника не знайдено');
 
   // писати в чат можуть лише учасники консультації: клієнт або призначений юрист
@@ -35,9 +32,6 @@ export async function createMessage(req, res) {
     throw new AppError(403, 'Лише учасники консультації можуть надсилати повідомлення');
   }
 
-  const message = await prisma.message.create({
-    data: { consultationId, senderId, text },
-    include: { sender: { select: { id: true, name: true, role: true } } },
-  });
+  const message = await messageModel.create({ consultationId, senderId, text });
   res.status(201).json({ data: message });
 }

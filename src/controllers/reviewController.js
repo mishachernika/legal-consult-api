@@ -1,23 +1,14 @@
-import { prisma } from '../db.js';
+import { reviewModel } from '../models/reviewModel.js';
+import { consultationModel } from '../models/consultationModel.js';
+import { lawyerModel } from '../models/lawyerModel.js';
 import { AppError } from '../utils/AppError.js';
 import { assertValid } from '../utils/validate.js';
 import { parseId } from '../utils/params.js';
 
-const reviewInclude = {
-  client: { select: { id: true, name: true } },
-  consultation: { select: { id: true, topic: true, status: true } },
-};
-
 // Перераховує середній рейтинг профілю юриста за всіма відгуками
 async function recalcLawyerRating(lawyerId) {
-  const agg = await prisma.review.aggregate({
-    where: { lawyerId },
-    _avg: { rating: true },
-  });
-  await prisma.lawyerProfile.update({
-    where: { userId: lawyerId },
-    data: { rating: agg._avg.rating },
-  });
+  const avg = await reviewModel.avgRating(lawyerId);
+  await lawyerModel.setRatingByUserId(lawyerId, avg);
 }
 
 export async function getReviews(req, res) {
@@ -27,30 +18,20 @@ export async function getReviews(req, res) {
   if (clientId) where.clientId = parseId(clientId, 'ідентифікатор клієнта');
   if (minRating) where.rating = { gte: parseId(minRating, 'мінімальний рейтинг') };
 
-  const reviews = await prisma.review.findMany({
-    where,
-    include: reviewInclude,
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json({ data: reviews });
+  res.json({ data: await reviewModel.findAll(where) });
 }
 
 export async function getReviewsByLawyer(req, res) {
   const lawyerUserId = parseId(req.params.id, 'ідентифікатор користувача-юриста');
-  const profile = await prisma.lawyerProfile.findUnique({ where: { userId: lawyerUserId } });
+  const profile = await lawyerModel.findByUserId(lawyerUserId);
   if (!profile) throw new AppError(404, 'Профіль юриста не знайдено');
 
-  const reviews = await prisma.review.findMany({
-    where: { lawyerId: lawyerUserId },
-    include: reviewInclude,
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json({ data: reviews });
+  res.json({ data: await reviewModel.findByLawyer(lawyerUserId) });
 }
 
 export async function getReviewById(req, res) {
   const id = parseId(req.params.id, 'ідентифікатор відгуку');
-  const review = await prisma.review.findUnique({ where: { id }, include: reviewInclude });
+  const review = await reviewModel.findById(id);
   if (!review) throw new AppError(404, 'Відгук не знайдено');
   res.json({ data: review });
 }
@@ -63,25 +44,19 @@ export async function createReview(req, res) {
   });
   const { consultationId, rating, text } = req.body;
 
-  const consultation = await prisma.consultation.findUnique({
-    where: { id: consultationId },
-    include: { review: true },
-  });
+  const consultation = await consultationModel.findByIdWithReview(consultationId);
   if (!consultation) throw new AppError(404, 'Консультацію не знайдено');
   if (consultation.review) throw new AppError(409, 'Відгук для цієї консультації вже існує');
   if (consultation.status !== 'COMPLETED') {
     throw new AppError(400, 'Відгук можна залишити лише після завершення консультації');
   }
 
-  const review = await prisma.review.create({
-    data: {
-      consultationId,
-      clientId: consultation.clientId,
-      lawyerId: consultation.lawyerId,
-      rating,
-      text,
-    },
-    include: reviewInclude,
+  const review = await reviewModel.create({
+    consultationId,
+    clientId: consultation.clientId,
+    lawyerId: consultation.lawyerId,
+    rating,
+    text,
   });
   await recalcLawyerRating(consultation.lawyerId);
 
@@ -102,14 +77,14 @@ export async function updateReview(req, res) {
   if (rating !== undefined) data.rating = rating;
   if (text !== undefined) data.text = text;
 
-  const review = await prisma.review.update({ where: { id }, data, include: reviewInclude });
+  const review = await reviewModel.update(id, data);
   await recalcLawyerRating(review.lawyerId);
   res.json({ data: review });
 }
 
 export async function deleteReview(req, res) {
   const id = parseId(req.params.id, 'ідентифікатор відгуку');
-  const review = await prisma.review.delete({ where: { id } });
+  const review = await reviewModel.remove(id);
   await recalcLawyerRating(review.lawyerId);
   res.status(204).end();
 }

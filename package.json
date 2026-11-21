@@ -12,8 +12,8 @@
     "start": "node --env-file=.env src/server.js",
     "db:migrate": "prisma migrate dev",
     "db:seed": "node prisma/seed.js",
-    "db:test": "DATABASE_URL=\"${DATABASE_URL_TEST:-postgresql://misha@localhost:5433/legal_consult_test}\" prisma migrate deploy",
-    "test": "npm run db:test && node --env-file-if-exists=.env.test --test \"tests/**/*.test.js\""
+    "db:test": "NODE_ENV=test prisma migrate deploy",
+    "test": "npm run db:test && NODE_ENV=test node --env-file-if-exists=.env.test --test \"tests/**/*.test.js\""
   },
   "prisma": {
     "seed": "node prisma/seed.js"
