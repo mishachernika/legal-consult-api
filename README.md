@@ -93,7 +93,29 @@ node scripts/smoke.mjs    # 16 smoke-перевірок проти запуще�
 bash scripts/curl-demo.sh # curl-приклади наживо
 ```
 
-Звіт з ЛР01 і скріншоти (Swagger UI, ER-діаграма, вікно терміналу з тестами) — у `reports/`.
+Звіт з ЛР01 — у `reports/lab1-report.md`.
+
+## Скріншоти
+
+Swagger UI на `/api-docs`:
+
+![Swagger UI](reports/screenshots/swagger-ui.png)
+
+ER-діаграма бази даних:
+
+![ER-діаграма](reports/screenshots/er-diagram.png)
+
+`npm test` у терміналі (28/28):
+
+![npm test](reports/screenshots/terminal-npm-test.png)
+
+Smoke-тест наживо, 16/16:
+
+![smoke](reports/screenshots/terminal-smoke.png)
+
+curl-запити до API:
+
+![curl](reports/screenshots/terminal-curl.png)
 
 ## Структура проєкту
 
