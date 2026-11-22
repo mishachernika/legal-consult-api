@@ -40,6 +40,9 @@ jobs:
       - name: Встановлення залежностей
         run: npm ci
 
+      - name: Генерація Prisma Client (папка src/generated не в git)
+        run: npx prisma generate
+
       - name: Міграції тестової бази
         run: npx prisma migrate deploy
 
