@@ -1,19 +1,26 @@
 # Legal Consult API
 
-REST API серверної частини **онлайн-платформи юридичних консультацій**: клієнти знаходять юриста за сферою права, створюють запит на консультацію, спілкуються з юристом у чаті та залишають відгук після завершення.
+Мій навчальний проєкт — серверна частина **онлайн-платформи юридичних консультацій**. Тут клієнт вибирає юриста за сферою права, замовляє консультацію, листується з юристом у чаті й після завершення лишає відгук із оцінкою.
 
-Проєкт — лабораторні роботи 1–3 курсу веброзробки (Node.js + Express + PostgreSQL + Prisma).
+Роблю це для лабораторних робіт 1–3 з вебтехнологій (backend на Node.js + Express + PostgreSQL).
+
+## Що вже вміє API
+
+- користувачі з ролями (`CLIENT`, `LAWYER`, `ADMIN`);
+- каталог юристів: профіль, сфери права, ставка за годину, середній рейтинг;
+- консультації зі статусами `PENDING → CONFIRMED → IN_PROGRESS → COMPLETED / CANCELLED` (якщо ціну не вказати — береться ставка юриста);
+- чат у межах консультації — писати можуть лише її учасники (клієнт і юрист), стороннім API повертає 403;
+- відгук можна лишити лише після завершення консультації, і лише один на консультацію; рейтинг юриста перераховується автоматично;
+- валідація всіх вхідних даних і помилки у форматі `{ "error": "...", "details": {...} }`;
+- документація Swagger — прямо в браузері на `/api-docs`.
 
 ## Стек
 
-- Node.js 24 LTS, ES-модулі (`"type": "module"`)
-- Express 5
-- PostgreSQL 17 + Prisma 7 (`prisma-client` генератор, `prisma.config.ts`, `@prisma/adapter-pg`)
-- Swagger (swagger-jsdoc + swagger-ui-express) — документація на `/api-docs`
-- helmet, cors
-- Тести: вбудований `node:test` + supertest (проти окремої тестової БД)
+Node.js 24 (ES-модулі) · Express 5 · PostgreSQL · Prisma 7 · Swagger (swagger-jsdoc + swagger-ui-express) · helmet + cors · тести на вбудованому `node:test` + supertest.
 
-## ER-діаграма
+## База даних
+
+6 таблиць: `User`, `LawyerProfile`, `Specialization`, `Consultation`, `Message`, `Review`. Зв'язки один-до-багатьох (користувач ↔ консультації, консультація ↔ чат/відгук) і багато-до-багатьох (юрист ↔ сфери права). Зовнішні ключі задані через `@relation`, є індекси на полях фільтрів.
 
 ```mermaid
 erDiagram
@@ -21,103 +28,93 @@ erDiagram
     User ||--o{ Consultation : "як юрист"
     User ||--o| LawyerProfile : "має профіль"
     User ||--o{ Message : "надсилає"
-    User ||--o{ Review : "залишає"
+    User ||--o{ Review : "залишає / отримує"
     LawyerProfile }o--o{ Specialization : "має сфери права"
     Consultation ||--o{ Message : "містить чат"
     Consultation ||--o| Review : "має відгук"
 ```
 
-Сутності: `User` (ролі CLIENT / LAWYER / ADMIN), `LawyerProfile`, `Specialization`, `Consultation`, `Message`, `Review`.
-Зв'язки: один-до-багатьох (User → Consultation двома роліями, Consultation → Message/Review) і багато-до-багатьох (LawyerProfile ↔ Specialization).
+## Як запустити у себе
 
-## Встановлення та запуск
-
-Вимоги: Node.js 24 LTS, PostgreSQL (локально або віддалено).
+Потрібні Node.js 24 і PostgreSQL.
 
 ```bash
-# клонування
 git clone https://github.com/mishachernika/legal-consult-api.git
 cd legal-consult-api
-
-# залежності
 npm install
 
-# змінні середовища (файл .env не входить до репозиторію)
-cp .env.example .env        # вкажіть свій DATABASE_URL
-cp .env.test.example .env.test   # для тестів
+cp .env.example .env          # вказати свій DATABASE_URL
+cp .env.test.example .env.test # для тестів
 
-# база даних: міграції + демо-дані (seed)
-npm run db:migrate
-npm run db:seed
-
-# запуск
-npm run dev        # із --watch, порт із .env (PORT=3000)
-npm start          # без --watch
+npm run db:migrate            # створити таблиці
+npm run db:seed               # демо-дані: юристи, клієнти, консультації, чат, відгук
+npm run dev                   # сервер з автоперезапуском
 ```
 
-Сервер: `http://localhost:3000` · Swagger UI: `http://localhost:3000/api-docs` · health-check: `GET /health`
+- API: `http://localhost:3000`
+- Swagger UI: `http://localhost:3000/api-docs`
+- health-check: `GET /health`
 
 ## Змінні середовища
 
-| Змінна | Призначення | Приклад |
+| Змінна | Навіщо | Приклад |
 |---|---|---|
-| `DATABASE_URL` | рядок підключення до PostgreSQL | `postgresql://user:pass@localhost:5432/legal_consult` |
-| `PORT` | порт HTTP-сервера | `3000` |
-| `FRONTEND_URL` | дозволений origin для CORS | `http://localhost:5173` |
+| `DATABASE_URL` | підключення до PostgreSQL | `postgresql://user:pass@localhost:5432/legal_consult` |
+| `PORT` | порт сервера | `3000` |
+| `FRONTEND_URL` | origin фронтенду для CORS | `http://localhost:5173` |
 
-## API
+`.env` і `.env.test` не лежать у репозиторії — тільки шаблони `.env.example` / `.env.test.example`.
 
-| Метод | Шлях | Опис |
+## Ендпоінти
+
+| Метод | Шлях | Що робить |
 |---|---|---|
 | GET | `/health` | стан сервера |
-| GET/POST | `/api/users` | список / створення користувача (`?role=`) |
-| GET/PUT/DELETE | `/api/users/:id` | картка / оновлення / видалення |
-| GET/POST | `/api/lawyers` | список із фільтрами (`?specializationId=&search=&minPrice=&maxPrice=&sortBy=&order=`) / створення профілю |
-| GET/PUT/DELETE | `/api/lawyers/:id` | профіль юриста з відгуками / оновлення / видалення |
-| GET | `/api/lawyers/:id/reviews` | відгуки про юриста (id користувача) |
-| GET/POST | `/api/specializations` | довідник сфер права |
-| GET/PUT/DELETE | `/api/specializations/:id` | картка сфери зі списком юристів |
-| GET/POST | `/api/consultations` | список із фільтрами (`?clientId=&lawyerId=&status=`) / новий запит (ціна за замовчуванням = ставка юриста) |
-| GET/PUT/DELETE | `/api/consultations/:id` | картка з чатом і відгуком / зміна статусу та полів / видалення |
-| GET/POST | `/api/consultations/:id/messages` | чат консультації (лише учасники можуть писати) |
-| GET/POST | `/api/reviews` | список відгуків (`?lawyerId=&clientId=&minRating=`) / відгук на завершену консультацію |
-| GET/PUT/DELETE | `/api/reviews/:id` | картка / оновлення / видалення відгуку |
+| GET, POST | `/api/users` | список (`?role=`) / створити користувача |
+| GET, PUT, DELETE | `/api/users/:id` | картка / оновити / видалити |
+| GET, POST | `/api/lawyers` | список із фільтрами і сортуванням (`?specializationId=&search=&minPrice=&maxPrice=&sortBy=&order=`) / створити профіль |
+| GET, PUT, DELETE | `/api/lawyers/:id` | профіль із відгуками / оновити / видалити |
+| GET | `/api/lawyers/:id/reviews` | відгуки про юриста |
+| GET, POST | `/api/specializations` | довідник сфер права |
+| GET, PUT, DELETE | `/api/specializations/:id` | картка сфери зі списком юристів |
+| GET, POST | `/api/consultations` | список (`?clientId=&lawyerId=&status=`) / новий запит |
+| GET, PUT, DELETE | `/api/consultations/:id` | картка з чатом і відгуком / змінити (у т.ч. статус) / видалити |
+| GET, POST | `/api/consultations/:id/messages` | чат консультації |
+| GET, POST | `/api/reviews` | список відгуків (`?lawyerId=&clientId=&minRating=`) / лишити відгук |
+| GET, PUT, DELETE | `/api/reviews/:id` | картка / оновити / видалити відгук |
 
-Усі помилки повертаються у форматі `{ "error": "...", "details": {...} }` з кодами 400 (валідація), 403, 404, 409, 500.
-Повна документація з прикладами — у Swagger UI на `/api-docs`.
+Детальні описи з прикладами — у Swagger UI.
 
-## Тестування
+## Тести та перевірка
 
 ```bash
-npm test                 # міграція тестової БД + 28 інтеграційних тестів (node:test + supertest)
-node scripts/smoke.mjs   # smoke-тест проти запущеного сервера (16 перевірок)
+npm test                  # 28 інтеграційних тестів проти окремої тестової БД
+node scripts/smoke.mjs    # 16 smoke-перевірок проти запущеного сервера
+bash scripts/curl-demo.sh # curl-приклади наживо
 ```
 
-CI: `.github/workflows/tests.yml` — на кожен push/PR жене тести на Node 24 із PostgreSQL 17 у сервісному контейнері.
+Звіт з ЛР01 і скріншоти (Swagger UI, ER-діаграма, вікно терміналу з тестами) — у `reports/`.
 
 ## Структура проєкту
 
 ```
-├── prisma/
-│   ├── schema.prisma        # моделі домену
-│   ├── migrations/          # історія міграцій
-│   └── seed.js              # демо-дані
+├── prisma/                  # schema.prisma, міграції, seed
 ├── src/
-│   ├── app.js               # збирання застосунку (без listen — для тестів)
-│   ├── server.js            # запуск сервера
-│   ├── db.js                # єдиний екземпляр PrismaClient
-│   ├── config/swagger.js    # конфігурація OpenAPI
-│   ├── models/              # шар моделей (MVC Model): усі Prisma-запити тут
+│   ├── models/              # шар моделей: усі запити до БД (MVC Model)
 │   ├── controllers/         # тонкі контролери: валідація + правила + відповіді
 │   ├── routes/              # маршрути + JSDoc для Swagger
 │   ├── middleware/          # централізована обробка помилок
-│   └── utils/               # валідація, AppError, parseId
+│   ├── utils/               # валідація, AppError, parseId
+│   ├── config/              # swagger
+│   ├── app.js               # збирання застосунку (без listen)
+│   ├── server.js            # запуск сервера
+│   └── db.js                # єдиний екземпляр PrismaClient
 ├── tests/api.test.js        # інтеграційні тести API
-├── scripts/smoke.mjs        # smoke-тест
-├── reports/                 # звіти лабораторних робіт
-└── .github/workflows/       # CI
+├── scripts/                 # smoke.mjs, curl-demo.sh
+├── reports/                 # звіти лабораторних + скріншоти
+└── .github/workflows/       # CI: тести на кожен push (Node 24 + PostgreSQL 17)
 ```
 
 ## Автор
 
-Чернік Михайло Богданович, група ІПЗ-41, ВФК НУХТ (викладач — Юхта О.А.)
+Чернік Михайло Богданович, група ІПЗ-41, Волинський фаховий коледж НУХТ (викладач — Юхта О.А.)
